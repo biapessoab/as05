@@ -1,7 +1,6 @@
 import streamlit as st
 from langchain_community.llms import HuggingFaceHub
 from langchain_community.embeddings import HuggingFaceEmbeddings
-import os
 from langchain_community.vectorstores import FAISS
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.chains import create_retrieval_chain
@@ -11,7 +10,8 @@ from PyPDF2 import PdfReader
 from dotenv import load_dotenv
 import os
 
-load_dotenv() 
+token = os.getenv("HUGGINGFACEHUB_API_TOKEN")
+
 
 def get_pdf_text(pdf_docs):
     """
@@ -24,51 +24,59 @@ def get_pdf_text(pdf_docs):
             text += page.extract_text()
     return text
 
+
 def get_text_chunks(text):
     """
     divide o texto em chunks para processamento pela llm
     define o tamanho dos chunks
     """
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1000,
-        chunk_overlap=200
-    )
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
     chunks = text_splitter.split_text(text)
     return chunks
+
 
 def get_vector_store(text_chunks):
     """
     cria banco de vetores a partir dos chunks de texto.
     cada chunk é convertido em um embedding (vetor numérico)
     """
-    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-    
+    embeddings = HuggingFaceEmbeddings(
+        model_name="sentence-transformers/all-MiniLM-L6-v2"
+    )
+
     vector_store = FAISS.from_texts(text_chunks, embedding=embeddings)
     return vector_store
+
 
 def get_conversational_chain():
     """
     cadeia de conversação (RAG - Retrieval Augmented Generation).
     """
     # Define o template do prompt para o LLM.
-    prompt = ChatPromptTemplate.from_template("""
+    prompt = ChatPromptTemplate.from_template(
+        """
     responda à pergunta do usuário com base apenas no contexto fornecido.
     se a resposta não for encontrada no contexto fornecido, diga que você não tem informações suficientes.
 
     contexto: {context}
 
     pergunta: {input}
-    """)
+    """
+    )
 
     llm = HuggingFaceHub(
         repo_id="google/flan-t5-small",
-        model_kwargs={"temperature": 0.1, "max_length": 512}
+        huggingfacehub_api_token=token,
+        model_kwargs={"temperature": 0.1, "max_length": 512},
     )
-    
+
     document_chain = create_stuff_documents_chain(llm, prompt)
     return document_chain
 
-st.set_page_config(page_title="Leitor e Analisador de PDF com LLM na Nuvem", layout="wide")
+
+st.set_page_config(
+    page_title="Leitor e Analisador de PDF com LLM na Nuvem", layout="wide"
+)
 st.header("Analise seus PDFs")
 
 if "messages" not in st.session_state:
@@ -90,10 +98,10 @@ if user_question:
 
         document_chain = get_conversational_chain()
         retriever = st.session_state.vector_store.as_retriever()
-        
+
         rag_chain = create_retrieval_chain(retriever, document_chain)
 
-        with st.spinner("Gerando resposta..."): #
+        with st.spinner("Gerando resposta..."):  #
             response = rag_chain.invoke({"input": user_question})
             answer = response["answer"]
 
@@ -106,15 +114,17 @@ with st.sidebar:
     pdf_docs = st.file_uploader(
         "Carregue seus arquivos PDF aqui e clique em 'Processar'",
         accept_multiple_files=True,
-        type="pdf"
+        type="pdf",
     )
-    
+
     if st.button("Processar PDFs"):
         if pdf_docs:
             with st.spinner("Processando PDFs..."):
                 raw_text = get_pdf_text(pdf_docs)
                 text_chunks = get_text_chunks(raw_text)
                 st.session_state.vector_store = get_vector_store(text_chunks)
-                st.success("PDFs processados com sucesso! Agora você pode fazer perguntas.")
+                st.success(
+                    "PDFs processados com sucesso! Agora você pode fazer perguntas."
+                )
         else:
             st.warning("Carregue pelo menos um arquivo PDF para processar.")
