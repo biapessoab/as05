@@ -11,20 +11,20 @@ from dotenv import load_dotenv
 import os
 import logging
 
-# Configura o logger
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Carrega variáveis do .env
 load_dotenv()
 token = os.getenv("HUGGINGFACEHUB_API_TOKEN")
 if not token:
-    logger.warning("Token da HuggingFace não encontrado no .env!")
+    logger.warning(
+        "Token da HuggingFace não encontrado no .env! Certifique-se de configurá-lo."
+    )
 
 
 def get_pdf_text(pdf_docs):
     """
-    extrai texto de uma lista de pdfs
+    Extrai texto de uma lista de PDFs.
     """
     logger.info("Extraindo texto de %d PDFs", len(pdf_docs))
     text = ""
@@ -38,8 +38,8 @@ def get_pdf_text(pdf_docs):
 
 def get_text_chunks(text):
     """
-    divide o texto em chunks para processamento pela llm
-    define o tamanho dos chunks
+    Divide o texto em pedaços (chunks) para processamento pelo LLM.
+    Define o tamanho dos chunks.
     """
     logger.info("Dividindo texto em chunks...")
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
@@ -50,7 +50,7 @@ def get_text_chunks(text):
 
 def get_vector_store(text_chunks):
     """
-    cria banco de vetores a partir dos chunks de texto.
+    Cria um banco de vetores a partir dos chunks de texto.
     """
     logger.info("Gerando embeddings e criando vector store...")
     embeddings = HuggingFaceEmbeddings(
@@ -63,27 +63,32 @@ def get_vector_store(text_chunks):
 
 def get_conversational_chain():
     """
-    cadeia de conversação (RAG - Retrieval Augmented Generation).
+    Define a cadeia de conversação (RAG - Retrieval Augmented Generation).
+    Isso inclui o prompt para o LLM e a configuração do modelo do Hugging Face Hub.
     """
     logger.info("Inicializando cadeia de conversação com LLM da HuggingFace...")
-    prompt = ChatPromptTemplate.from_template(
-        """
-        Responda à pergunta do usuário com base apenas no contexto fornecido.
-        Se a resposta não puder ser encontrada no contexto fornecido, diga que você não tem informações suficientes.
 
-        Contexto: {context}
-        Pergunta: {input}
-        """
-    )
+    prompt_template = """Você é um assistente útil. Responda à pergunta com base no contexto, **em português**, de forma breve e precisa.
+Se não souber, diga que não sabe.
+
+[Contexto]
+{context}
+
+[Pergunta]
+{input}
+
+[Resposta]
+"""
+
+    prompt = ChatPromptTemplate.from_template(prompt_template)
 
     try:
         llm = HuggingFaceHub(
-            repo_id="mistralai/Mixtral-8x7B-Instruct-v0.1",
+            repo_id="HuggingFaceH4/zephyr-7b-beta",
             huggingfacehub_api_token=token,
             model_kwargs={"temperature": 0.1, "max_new_tokens": 512},
         )
-
-        logger.info("LLM carregada com sucesso.")
+        logger.info("LLM carregada com sucesso: HuggingFaceH4/zephyr-7b-beta.")
     except Exception as e:
         logger.error("Erro ao carregar HuggingFaceHub LLM: %s", e)
         raise
@@ -92,7 +97,7 @@ def get_conversational_chain():
     return document_chain
 
 
-# === STREAMLIT APP ===
+# --- STREAMLIT APP ---
 st.set_page_config(
     page_title="Leitor e Analisador de PDF com LLM na Nuvem", layout="wide"
 )
@@ -124,12 +129,14 @@ if user_question:
             with st.spinner("Gerando resposta..."):
                 logger.info("Chamando cadeia RAG com pergunta: %s", user_question)
                 response = rag_chain.invoke({"input": user_question})
-                answer = response["answer"]
-                logger.info("Resposta gerada com sucesso.")
+                answer_raw = response["answer"]
+                final_answer = answer_raw.strip()
 
             with st.chat_message("assistant"):
-                st.markdown(answer)
-            st.session_state.messages.append({"role": "assistant", "content": answer})
+                st.markdown(final_answer)
+            st.session_state.messages.append(
+                {"role": "assistant", "content": final_answer}
+            )
         except Exception as e:
             logger.exception("Erro ao gerar resposta: %s", e)
             st.error(f"Erro ao gerar resposta: {e}")
