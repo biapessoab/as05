@@ -21,6 +21,7 @@ token = os.getenv("HUGGINGFACEHUB_API_TOKEN")
 if not token:
     logger.warning("Token da HuggingFace não encontrado no .env!")
 
+
 def get_pdf_text(pdf_docs):
     """
     extrai texto de uma lista de pdfs
@@ -67,21 +68,21 @@ def get_conversational_chain():
     logger.info("Inicializando cadeia de conversação com LLM da HuggingFace...")
     prompt = ChatPromptTemplate.from_template(
         """
-        responda à pergunta do usuário com base apenas no contexto fornecido.
-        se a resposta não for encontrada no contexto fornecido, diga que você não tem informações suficientes.
+        Responda à pergunta do usuário com base apenas no contexto fornecido.
+        Se a resposta não puder ser encontrada no contexto fornecido, diga que você não tem informações suficientes.
 
-        contexto: {context}
-
-        pergunta: {input}
+        Contexto: {context}
+        Pergunta: {input}
         """
     )
 
     try:
         llm = HuggingFaceHub(
-            repo_id="google/flan-t5-small",
+            repo_id="mistralai/Mixtral-8x7B-Instruct-v0.1",
             huggingfacehub_api_token=token,
-            model_kwargs={"temperature": 0.1, "max_length": 512},
+            model_kwargs={"temperature": 0.1, "max_new_tokens": 512},
         )
+
         logger.info("LLM carregada com sucesso.")
     except Exception as e:
         logger.error("Erro ao carregar HuggingFaceHub LLM: %s", e)
@@ -149,7 +150,9 @@ with st.sidebar:
                     raw_text = get_pdf_text(pdf_docs)
                     text_chunks = get_text_chunks(raw_text)
                     st.session_state.vector_store = get_vector_store(text_chunks)
-                    st.success("PDFs processados com sucesso! Agora você pode fazer perguntas.")
+                    st.success(
+                        "PDFs processados com sucesso! Agora você pode fazer perguntas."
+                    )
             except Exception as e:
                 logger.exception("Erro ao processar PDFs: %s", e)
                 st.error(f"Erro ao processar PDFs: {e}")
