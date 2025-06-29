@@ -1,0 +1,8 @@
+streamlit
+langchain
+huggingface_hub==0.13.4
+sentence-transformers
+faiss-cpu
+PyPDF2
+python-dotenv
+langchain-community
